@@ -72,7 +72,7 @@ const server = createServer(async (request, response) => {
       const [fileName, contentType] = publicFile;
       response.writeHead(200, {
         "Content-Type": contentType,
-        "Cache-Control": fileName === "index.html" ? "no-cache" : "public, max-age=3600",
+        "Cache-Control": "no-cache",
       });
       response.end(readFileSync(path.join(__dirname, fileName)));
       return;
