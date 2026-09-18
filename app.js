@@ -1,4 +1,5 @@
 const state = {
+  user: null,
   signals: [],
   dashboards: [],
   matches: [],
@@ -11,6 +12,15 @@ const state = {
 };
 
 const els = {
+  authShell: document.getElementById("auth-shell"),
+  appShell: document.getElementById("app-shell"),
+  loginForm: document.getElementById("login-form"),
+  registerForm: document.getElementById("register-form"),
+  showLoginButton: document.getElementById("show-login-button"),
+  showRegisterButton: document.getElementById("show-register-button"),
+  authMessage: document.getElementById("auth-message"),
+  accountEmail: document.getElementById("account-email"),
+  logoutButton: document.getElementById("logout-button"),
   navButtons: Array.from(document.querySelectorAll(".nav-button")),
   views: Array.from(document.querySelectorAll(".view")),
   heroStats: document.getElementById("hero-stats"),
@@ -44,10 +54,11 @@ const els = {
 
 init().catch((error) => {
   console.error(error);
-  showAppError("The app couldn't connect to the local API. Start the server with `npm start`.");
+  showAuthMessage("Recall couldn't connect to the server. Please try again.");
 });
 
 async function init() {
+  bindAuthControls();
   bindNavigation();
   bindThemePicker();
   bindSignalForm();
@@ -56,9 +67,96 @@ async function init() {
   bindGameControls();
   bindDashboardDetailControls();
   ensureGameCardsForMatchType();
-  await refreshState();
   loadThemePreference();
+  const payload = await request("/api/auth/session");
+  if (payload.user) {
+    await enterApp(payload.user);
+  } else {
+    showAuthShell();
+  }
+}
+
+function bindAuthControls() {
+  els.showLoginButton.addEventListener("click", () => showAuthMode("login"));
+  els.showRegisterButton.addEventListener("click", () => showAuthMode("register"));
+
+  els.loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitAuthForm(els.loginForm, "/api/auth/login");
+  });
+
+  els.registerForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitAuthForm(els.registerForm, "/api/auth/register");
+  });
+
+  els.logoutButton.addEventListener("click", async () => {
+    await request("/api/auth/logout", { method: "POST" });
+    state.user = null;
+    state.signals = [];
+    state.dashboards = [];
+    state.matches = [];
+    state.activeDashboardId = null;
+    state.pendingMatchDashboardId = null;
+    showAuthShell();
+  });
+}
+
+async function submitAuthForm(form, path) {
+  hideAuthMessage();
+  const submitButton = form.querySelector('button[type="submit"]');
+  const formData = new FormData(form);
+  submitButton.disabled = true;
+  try {
+    const payload = await request(path, {
+      method: "POST",
+      body: JSON.stringify({
+        email: String(formData.get("email")).trim(),
+        password: String(formData.get("password")),
+      }),
+    });
+    form.reset();
+    await enterApp(payload.user);
+  } catch (error) {
+    showAuthMessage(error.message);
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function enterApp(user) {
+  state.user = user;
+  els.accountEmail.textContent = user.email;
+  els.authShell.hidden = true;
+  els.appShell.hidden = false;
+  state.loading = true;
   setActiveView("overview");
+  await refreshState();
+}
+
+function showAuthShell() {
+  els.appShell.hidden = true;
+  els.authShell.hidden = false;
+  showAuthMode("login");
+}
+
+function showAuthMode(mode) {
+  const isLogin = mode === "login";
+  els.loginForm.hidden = !isLogin;
+  els.registerForm.hidden = isLogin;
+  els.showLoginButton.classList.toggle("active", isLogin);
+  els.showRegisterButton.classList.toggle("active", !isLogin);
+  hideAuthMessage();
+}
+
+function showAuthMessage(message) {
+  els.authMessage.textContent = message;
+  els.authMessage.hidden = false;
+}
+
+function hideAuthMessage() {
+  els.authMessage.hidden = true;
+  els.authMessage.textContent = "";
 }
 
 async function refreshState() {
@@ -887,6 +985,7 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
+    if (response.status === 401 && !path.startsWith("/api/auth/")) showAuthShell();
     throw new Error(payload.error || `Request failed with status ${response.status}`);
   }
 

@@ -1,9 +1,10 @@
 import { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import { promisify } from "node:util";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.resolve(process.env.DB_PATH || path.join(__dirname, "data", "recall.sqlite"));
@@ -18,33 +19,52 @@ mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new DatabaseSync(dbPath);
 db.exec("PRAGMA foreign_keys = ON");
 initializeDatabase();
+const scrypt = promisify(crypto.scrypt);
+const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 
 const server = createServer(async (request, response) => {
   try {
-    addCorsHeaders(response);
-    if (request.method === "OPTIONS") return sendEmpty(response, 204);
-
+    addSecurityHeaders(response);
     const url = new URL(request.url, "http://localhost");
 
     if (url.pathname === "/api/health" && request.method === "GET") {
-      const matches = db.prepare("SELECT COUNT(*) AS count FROM matches").get().count;
-      return sendJson(response, 200, { ok: true, matches });
+      return sendJson(response, 200, { ok: true });
     }
+    if (url.pathname === "/api/auth/session" && request.method === "GET") {
+      return sendJson(response, 200, { user: getAuthenticatedUser(request) });
+    }
+    if (url.pathname === "/api/auth/register" && request.method === "POST") {
+      const user = await registerUser(await readJsonBody(request));
+      createSession(response, user.id);
+      return sendJson(response, 201, { user: publicUser(user) });
+    }
+    if (url.pathname === "/api/auth/login" && request.method === "POST") {
+      const user = await loginUser(await readJsonBody(request));
+      createSession(response, user.id);
+      return sendJson(response, 200, { user: publicUser(user) });
+    }
+    if (url.pathname === "/api/auth/logout" && request.method === "POST") {
+      deleteSession(request);
+      clearSessionCookie(response);
+      return sendJson(response, 200, { ok: true });
+    }
+
+    const user = url.pathname.startsWith("/api/") ? requireAuthenticatedUser(request) : null;
     if (url.pathname === "/api/bootstrap" && request.method === "GET") {
-      return sendJson(response, 200, getBootstrapPayload());
+      return sendJson(response, 200, getBootstrapPayload(user.id));
     }
     if (url.pathname === "/api/signals" && request.method === "POST") {
-      return sendJson(response, 201, createSignal(await readJsonBody(request)));
+      return sendJson(response, 201, createSignal(user.id, await readJsonBody(request)));
     }
     if (url.pathname === "/api/dashboards" && request.method === "POST") {
-      return sendJson(response, 201, createDashboard(await readJsonBody(request)));
+      return sendJson(response, 201, createDashboard(user.id, await readJsonBody(request)));
     }
     if (url.pathname.startsWith("/api/dashboards/") && request.method === "DELETE") {
-      deleteDashboard(decodeURIComponent(url.pathname.split("/").pop()));
+      deleteDashboard(user.id, decodeURIComponent(url.pathname.split("/").pop()));
       return sendJson(response, 200, { ok: true });
     }
     if (url.pathname === "/api/matches" && request.method === "POST") {
-      return sendJson(response, 201, createMatch(await readJsonBody(request)));
+      return sendJson(response, 201, createMatch(user.id, await readJsonBody(request)));
     }
 
     const publicFile = publicFiles.get(url.pathname);
@@ -60,7 +80,7 @@ const server = createServer(async (request, response) => {
 
     sendJson(response, 404, { error: "Not found" });
   } catch (error) {
-    console.error(error);
+    if (!(error instanceof HttpError)) console.error(error);
     sendJson(response, error instanceof HttpError ? error.status : 500, {
       error: error instanceof Error ? error.message : "Unexpected server error",
     });
@@ -89,20 +109,31 @@ function initializeDatabase() {
   const hasSchema = db
     .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'signals'")
     .get();
-  if (hasSchema) return;
+  if (!hasSchema) {
+    const migrations = [
+      "drizzle/0000_steady_lockheed.sql",
+      "drizzle/0001_noisy_rattler.sql",
+      "drizzle/0002_import_local_data.sql",
+    ];
+    for (const relativePath of migrations) {
+      runMigration(relativePath);
+    }
+  }
 
-  const migrations = [
-    "drizzle/0000_steady_lockheed.sql",
-    "drizzle/0001_noisy_rattler.sql",
-    "drizzle/0002_import_local_data.sql",
-  ];
+  const hasUsers = db
+    .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'users'")
+    .get();
+  if (!hasUsers) runMigration("drizzle/0003_add_auth.sql");
+}
 
+function runMigration(relativePath) {
+  const sql = readFileSync(path.join(__dirname, relativePath), "utf8").replaceAll(
+    "--> statement-breakpoint",
+    "",
+  );
   db.exec("BEGIN");
   try {
-    for (const relativePath of migrations) {
-      const sql = readFileSync(path.join(__dirname, relativePath), "utf8");
-      db.exec(sql);
-    }
+    db.exec(sql);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -110,25 +141,163 @@ function initializeDatabase() {
   }
 }
 
-function getBootstrapPayload() {
-  return { signals: listSignals(), dashboards: listDashboards(), matches: listMatches() };
+function getBootstrapPayload(userId) {
+  return { signals: listSignals(userId), dashboards: listDashboards(userId), matches: listMatches(userId) };
 }
 
-function listSignals() {
+async function registerUser(body) {
+  const email = normalizeEmail(body.email);
+  const password = String(body.password || "");
+  assert(email, "A valid email address is required.");
+  assert(password.length >= 8, "Password must be at least 8 characters.");
+  assert(password.length <= 256, "Password is too long.");
+
+  const salt = crypto.randomBytes(16).toString("hex");
+  const passwordHash = await hashPassword(password, salt);
+  const user = { id: crypto.randomUUID(), email };
+
+  try {
+    runInTransaction(() => {
+      db.prepare(
+        "INSERT INTO users (id, email, password_hash, password_salt) VALUES (?, ?, ?, ?)",
+      ).run(user.id, email, passwordHash, salt);
+
+      // The first account adopts data from the original single-user deployment.
+      const userCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
+      if (userCount === 1) {
+        db.prepare("UPDATE signals SET user_id = ? WHERE user_id IS NULL").run(user.id);
+        db.prepare("UPDATE dashboards SET user_id = ? WHERE user_id IS NULL").run(user.id);
+        db.prepare("UPDATE matches SET user_id = ? WHERE user_id IS NULL").run(user.id);
+      }
+    });
+  } catch (error) {
+    if (String(error?.message || "").includes("UNIQUE constraint failed")) {
+      throw new HttpError(409, "An account with that email already exists.");
+    }
+    throw error;
+  }
+
+  return user;
+}
+
+async function loginUser(body) {
+  const email = normalizeEmail(body.email);
+  const password = String(body.password || "");
+  const user = db
+    .prepare("SELECT id, email, password_hash, password_salt FROM users WHERE email = ?")
+    .get(email);
+  if (!user) throw new HttpError(401, "Invalid email or password.");
+
+  const candidateHash = await hashPassword(password, user.password_salt);
+  const stored = Buffer.from(user.password_hash, "hex");
+  const candidate = Buffer.from(candidateHash, "hex");
+  if (stored.length !== candidate.length || !crypto.timingSafeEqual(stored, candidate)) {
+    throw new HttpError(401, "Invalid email or password.");
+  }
+  return user;
+}
+
+function createSession(response, userId) {
+  db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(new Date().toISOString());
+  const token = crypto.randomBytes(32).toString("base64url");
+  const idHash = hashSessionToken(token);
+  const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000).toISOString();
+  db.prepare("INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (?, ?, ?)").run(
+    idHash,
+    userId,
+    expiresAt,
+  );
+  response.setHeader("Set-Cookie", sessionCookie(token, sessionMaxAgeSeconds));
+}
+
+function getAuthenticatedUser(request) {
+  const token = parseCookies(request.headers.cookie || "").recall_session;
+  if (!token) return null;
+  const row = db
+    .prepare(
+      `SELECT u.id, u.email, s.expires_at
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.id_hash = ?`,
+    )
+    .get(hashSessionToken(token));
+  if (!row) return null;
+  if (row.expires_at <= new Date().toISOString()) {
+    db.prepare("DELETE FROM sessions WHERE id_hash = ?").run(hashSessionToken(token));
+    return null;
+  }
+  return publicUser(row);
+}
+
+function requireAuthenticatedUser(request) {
+  const user = getAuthenticatedUser(request);
+  if (!user) throw new HttpError(401, "Please sign in to continue.");
+  return user;
+}
+
+function deleteSession(request) {
+  const token = parseCookies(request.headers.cookie || "").recall_session;
+  if (token) db.prepare("DELETE FROM sessions WHERE id_hash = ?").run(hashSessionToken(token));
+}
+
+function clearSessionCookie(response) {
+  response.setHeader("Set-Cookie", sessionCookie("", 0));
+}
+
+function sessionCookie(token, maxAge) {
+  const secure = process.env.NODE_ENV === "production" || process.env.RENDER === "true" ? "; Secure" : "";
+  return `recall_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
+function parseCookies(header) {
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separator = part.indexOf("=");
+        return separator === -1
+          ? [part, ""]
+          : [part.slice(0, separator), decodeURIComponent(part.slice(separator + 1))];
+      }),
+  );
+}
+
+function hashSessionToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+async function hashPassword(password, salt) {
+  const derivedKey = await scrypt(password, salt, 64);
+  return Buffer.from(derivedKey).toString("hex");
+}
+
+function normalizeEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254 ? email : "";
+}
+
+function publicUser(user) {
+  return { id: user.id, email: user.email };
+}
+
+function listSignals(userId) {
   return db
-    .prepare("SELECT id, name, scope, description FROM signals ORDER BY created_at DESC, rowid DESC")
-    .all();
+    .prepare("SELECT id, name, scope, description FROM signals WHERE user_id = ? ORDER BY created_at DESC, rowid DESC")
+    .all(userId);
 }
 
-function listDashboards() {
+function listDashboards(userId) {
   const rows = db
     .prepare(
       `SELECT d.id, d.name, d.filters_json, ds.signal_id
        FROM dashboards d
        LEFT JOIN dashboard_signals ds ON ds.dashboard_id = d.id
+       WHERE d.user_id = ?
        ORDER BY d.created_at DESC, d.rowid DESC`,
     )
-    .all();
+    .all(userId);
   const dashboards = new Map();
   for (const row of rows) {
     if (!dashboards.has(row.id)) {
@@ -144,22 +313,26 @@ function listDashboards() {
   return Array.from(dashboards.values());
 }
 
-function listMatches() {
+function listMatches(userId) {
   const matchRows = db
     .prepare(
       `SELECT id, date, deck, opponent, format, play_mode, match_type, tags_json, notes, winner, signals_json
        FROM matches
+       WHERE user_id = ?
        ORDER BY date DESC, created_at DESC, rowid DESC`,
     )
-    .all();
+    .all(userId);
   const gameRows = db
     .prepare(
       `SELECT id, match_id, game_index, player_on_play, opening_hand_size, winner, coinflip_won, signals_json
        FROM games
+       WHERE match_id IN (SELECT id FROM matches WHERE user_id = ?)
        ORDER BY match_id, game_index ASC`,
     )
-    .all();
-  const membershipRows = db.prepare("SELECT match_id, dashboard_id FROM match_dashboards").all();
+    .all(userId);
+  const membershipRows = db.prepare(
+    "SELECT match_id, dashboard_id FROM match_dashboards WHERE match_id IN (SELECT id FROM matches WHERE user_id = ?)",
+  ).all(userId);
 
   const gamesByMatchId = new Map();
   for (const game of gameRows) {
@@ -199,7 +372,7 @@ function listMatches() {
   }));
 }
 
-function createSignal(body) {
+function createSignal(userId, body) {
   assert(body.name, "Signal name is required.");
   assert(body.scope === "match" || body.scope === "game", "Signal scope must be `match` or `game`.");
   const signal = {
@@ -209,27 +382,31 @@ function createSignal(body) {
     description: String(body.description || "").trim(),
   };
   assert(signal.name, "Signal name is required.");
-  db.prepare("INSERT INTO signals (id, name, scope, description) VALUES (?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO signals (id, name, scope, description, user_id) VALUES (?, ?, ?, ?, ?)").run(
     signal.id,
     signal.name,
     signal.scope,
     signal.description,
+    userId,
   );
   return signal;
 }
 
-function createDashboard(body) {
+function createDashboard(userId, body) {
   assert(body.name, "Dashboard name is required.");
   const name = String(body.name).trim();
   const signalIds = Array.isArray(body.signalIds) ? body.signalIds.map(String) : [];
   const id = crypto.randomUUID();
   const filters = { deck: "", opponent: "", playMode: "", format: "", tag: "" };
 
+  assertOwnedIds("signals", signalIds, userId, "One or more selected signals are unavailable.");
+
   runInTransaction(() => {
-    db.prepare("INSERT INTO dashboards (id, name, filters_json) VALUES (?, ?, ?)").run(
+    db.prepare("INSERT INTO dashboards (id, name, filters_json, user_id) VALUES (?, ?, ?, ?)").run(
       id,
       name,
       JSON.stringify(filters),
+      userId,
     );
     const insert = db.prepare("INSERT INTO dashboard_signals (dashboard_id, signal_id) VALUES (?, ?)");
     for (const signalId of signalIds) insert.run(id, signalId);
@@ -237,18 +414,21 @@ function createDashboard(body) {
   return { id, name, filters, signalIds };
 }
 
-function deleteDashboard(dashboardId) {
+function deleteDashboard(userId, dashboardId) {
   assert(dashboardId, "Dashboard id is required.");
-  const dashboard = db.prepare("SELECT id FROM dashboards WHERE id = ?").get(dashboardId);
+  const dashboard = db.prepare("SELECT id FROM dashboards WHERE id = ? AND user_id = ?").get(dashboardId, userId);
   if (!dashboard) throw new HttpError(404, "Dashboard not found.");
   db.prepare("DELETE FROM dashboards WHERE id = ?").run(dashboardId);
 }
 
-function createMatch(body) {
+function createMatch(userId, body) {
   assert(body.matchType === "bo1" || body.matchType === "bo3", "Match type must be `bo1` or `bo3`.");
   assert(Array.isArray(body.games) && body.games.length > 0, "At least one game is required.");
   const games = body.games.map(sanitizeGame);
   const dashboardIds = Array.isArray(body.dashboardIds) ? body.dashboardIds.map(String) : [];
+  assertOwnedIds("dashboards", dashboardIds, userId, "One or more selected dashboards are unavailable.");
+  assertOwnedSignalMap(userId, body.signals || {}, "match");
+  for (const game of body.games) assertOwnedSignalMap(userId, game.signals || {}, "game");
   const match = {
     id: crypto.randomUUID(),
     date: String(body.date || getLocalDateString()),
@@ -268,8 +448,8 @@ function createMatch(body) {
   runInTransaction(() => {
     db.prepare(
       `INSERT INTO matches
-       (id, date, deck, opponent, format, play_mode, match_type, tags_json, notes, winner, signals_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, date, deck, opponent, format, play_mode, match_type, tags_json, notes, winner, signals_json, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       match.id,
       match.date,
@@ -282,6 +462,7 @@ function createMatch(body) {
       match.notes,
       match.winner,
       JSON.stringify(match.signals),
+      userId,
     );
 
     const insertGame = db.prepare(
@@ -308,7 +489,26 @@ function createMatch(body) {
     for (const dashboardId of dashboardIds) insertDashboard.run(match.id, dashboardId);
   });
 
-  return listMatches().find((savedMatch) => savedMatch.id === match.id);
+  return listMatches(userId).find((savedMatch) => savedMatch.id === match.id);
+}
+
+function assertOwnedIds(table, ids, userId, message) {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  const count = db.prepare(
+    `SELECT COUNT(*) AS count FROM ${table} WHERE user_id = ? AND id IN (${placeholders})`,
+  ).get(userId, ...ids).count;
+  if (count !== new Set(ids).size) throw new HttpError(400, message);
+}
+
+function assertOwnedSignalMap(userId, signalMap, scope) {
+  const ids = Object.keys(signalMap);
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  const count = db.prepare(
+    `SELECT COUNT(*) AS count FROM signals WHERE user_id = ? AND scope = ? AND id IN (${placeholders})`,
+  ).get(userId, scope, ...ids).count;
+  if (count !== new Set(ids).size) throw new HttpError(400, "One or more signals are unavailable.");
 }
 
 function runInTransaction(work) {
@@ -357,20 +557,16 @@ async function readJsonBody(request) {
   return raw ? JSON.parse(raw) : {};
 }
 
-function addCorsHeaders(response) {
-  response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-}
-
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
 }
 
-function sendEmpty(response, statusCode) {
-  response.writeHead(statusCode);
-  response.end();
+function addSecurityHeaders(response) {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
 }
 
 function getLocalDateString() {

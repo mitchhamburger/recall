@@ -13,7 +13,49 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body data-theme="ledger">
-    <div class="app-shell">
+    <main class="auth-shell" id="auth-shell">
+      <section class="auth-card">
+        <div class="auth-brand">
+          <p class="eyebrow">MTG Stats Tracker</p>
+          <h1>Recall</h1>
+          <p>Sign in to keep your dashboards, signals, and match history private.</p>
+        </div>
+
+        <div class="auth-tabs" role="tablist" aria-label="Account access">
+          <button type="button" class="auth-tab active" id="show-login-button">Sign In</button>
+          <button type="button" class="auth-tab" id="show-register-button">Create Account</button>
+        </div>
+
+        <p class="auth-message" id="auth-message" role="alert" hidden></p>
+
+        <form id="login-form" class="stack auth-form">
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" autocomplete="email" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" name="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Sign In</button>
+        </form>
+
+        <form id="register-form" class="stack auth-form" hidden>
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" autocomplete="email" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" name="password" autocomplete="new-password" minlength="8" required />
+            <small>Use at least 8 characters.</small>
+          </label>
+          <button type="submit">Create Account</button>
+        </form>
+      </section>
+    </main>
+
+    <div class="app-shell" id="app-shell" hidden>
       <aside class="sidebar">
         <div class="brand">
           <p class="eyebrow">MTG Stats Tracker</p>
@@ -29,6 +71,12 @@
           <button class="nav-button" data-view="signals">Signals</button>
           <button class="nav-button" data-view="dashboards">Dashboards</button>
         </nav>
+
+        <section class="sidebar-panel">
+          <p class="eyebrow">Signed In</p>
+          <p class="account-email" id="account-email"></p>
+          <button type="button" class="ghost account-logout" id="logout-button">Sign Out</button>
+        </section>
 
         <section class="sidebar-panel">
           <h2>Visual Style</h2>

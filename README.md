@@ -8,6 +8,7 @@
 - Log BO1 or BO3 matches quickly with notes and per-game outcomes
 - Create dashboards and assign matches directly into them from each dashboard's dedicated page
 - Compare win rates when a chosen signal was present versus absent
+- Create an account and keep dashboards, signals, matches, and statistics private
 - Persist everything in SQLite
 
 ## Files
@@ -38,10 +39,15 @@ The included `render.yaml` defines a Node web service with a 1 GB persistent dis
 
 SQLite requires the persistent disk configuration. Render's free web tier uses an ephemeral filesystem and would lose logged matches whenever the service restarts or redeploys.
 
+Recall includes built-in email/password accounts. Passwords are salted and hashed with scrypt,
+sessions are stored server-side, and all tracker data is isolated by account. When accounts are
+enabled on an existing deployment, the first account created adopts the original single-user data;
+later accounts start empty.
+
 ## Good next steps
 
 - Add editing and deletion for dashboards and matches
 - Add exports/imports so your friend group can share datasets
-- Add authentication and a hosted database before wider sharing
+- Add password reset and email verification before wider public distribution
 - Support adding one match to multiple dashboards from the UI
 - Add more MTG-specific built-ins like mulligan decisions, sideboard plans, and on-the-play win rate
