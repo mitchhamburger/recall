@@ -1,6 +1,6 @@
 # Recall
 
-`Recall` is a lightweight web app for tracking Magic: The Gathering match results and analyzing whether custom in-game signals correlate with winning. It runs locally with a Cloudflare Worker-compatible server and deploys through OpenAI Sites with persistent D1 storage.
+`Recall` is a lightweight web app for tracking Magic: The Gathering match results and analyzing whether custom in-game signals correlate with winning. It runs as a small Node server backed by SQLite and is configured for Git-based deployment on Render.
 
 ## What this first version does
 
@@ -8,15 +8,15 @@
 - Log BO1 or BO3 matches quickly with notes and per-game outcomes
 - Create dashboards and assign matches directly into them from each dashboard's dedicated page
 - Compare win rates when a chosen signal was present versus absent
-- Persist everything in hosted SQLite-compatible D1 storage
+- Persist everything in SQLite
 
 ## Files
 
 - [index.html](/Users/papichulo/Projects/Recall/index.html)
 - [styles.css](/Users/papichulo/Projects/Recall/styles.css)
 - [app.js](/Users/papichulo/Projects/Recall/app.js)
-- [worker/index.js](/Users/papichulo/Projects/Recall/worker/index.js)
-- [db/schema.ts](/Users/papichulo/Projects/Recall/db/schema.ts)
+- [server.js](/Users/papichulo/Projects/Recall/server.js)
+- [render.yaml](/Users/papichulo/Projects/Recall/render.yaml)
 - [package.json](/Users/papichulo/Projects/Recall/package.json)
 
 ## Running it
@@ -25,20 +25,18 @@ Install dependencies and start the local app server:
 
 ```bash
 npm install
-npm run dev
+npm start
 ```
 
-Use the local URL printed by Vite, normally [http://localhost:5173](http://localhost:5173).
+Then visit [http://localhost:3000](http://localhost:3000).
 
-The checked-in Drizzle migrations create the database schema and import the original local dataset. The old local database under `data/` is intentionally excluded from Git.
+The local database is stored at `data/recall.sqlite` and intentionally excluded from Git. On a new server, the checked-in SQL migrations create the database and import the original dataset.
 
-## Validation
+## Deploying on Render
 
-Create a production deployment bundle with:
+The included `render.yaml` defines a Node web service with a 1 GB persistent disk mounted at `/var/data`. Render can connect to the Git repository, deploy each commit automatically, and expose the service at an `onrender.com` URL.
 
-```bash
-npm run build
-```
+SQLite requires the persistent disk configuration. Render's free web tier uses an ephemeral filesystem and would lose logged matches whenever the service restarts or redeploys.
 
 ## Good next steps
 

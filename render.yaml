@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: recall
+    runtime: node
+    plan: 0.5c-512mb
+    region: virginia
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: DB_PATH
+        value: /var/data/recall.sqlite
+    disk:
+      name: recall-data
+      mountPath: /var/data
+      sizeGB: 1
