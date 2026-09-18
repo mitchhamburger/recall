@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recall MTG Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-theme="ledger">
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <p class="eyebrow">MTG Stats Tracker</p>
+          <h1>Recall</h1>
+          <p class="brand-copy">
+            Log matches, define your own signals, and inspect what actually correlates with wins.
+          </p>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-button active" data-view="overview">Overview</button>
+          <button class="nav-button" data-view="matches">Log Matches</button>
+          <button class="nav-button" data-view="signals">Signals</button>
+          <button class="nav-button" data-view="dashboards">Dashboards</button>
+        </nav>
+
+        <section class="sidebar-panel">
+          <h2>Visual Style</h2>
+          <div class="theme-picker" id="theme-picker">
+            <button type="button" class="theme-button" data-theme="embers">Embers</button>
+            <button type="button" class="theme-button active" data-theme="ledger">Ledger</button>
+            <button type="button" class="theme-button" data-theme="nightfall">Nightfall</button>
+          </div>
+        </section>
+
+        <section class="sidebar-panel">
+          <h2>Quick Notes</h2>
+          <ul class="compact-list">
+            <li>`Match` signals apply once per match.</li>
+            <li>`Game` signals can be checked separately for each game.</li>
+            <li>Dashboards define which assigned matches and signals to analyze.</li>
+          </ul>
+        </section>
+      </aside>
+
+      <main class="main-content">
+        <section class="hero">
+          <div>
+            <p class="eyebrow">Personal-use MVP</p>
+            <h2>Track what happened, then test whether it mattered.</h2>
+          </div>
+          <div class="hero-stats" id="hero-stats"></div>
+        </section>
+
+        <section class="view active" id="view-overview">
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Overview</p>
+                  <h3>All Dashboards</h3>
+                </div>
+              </div>
+              <div id="overview-dashboard-hero" class="metric-grid"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Highlights</p>
+                  <h3>Dashboard Standouts</h3>
+                </div>
+              </div>
+              <div id="dashboard-highlights"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Directory</p>
+                  <h3>Dashboard Breakdown</h3>
+                </div>
+              </div>
+              <div id="overview-dashboard-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-matches">
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Data Entry</p>
+                  <h3>Log A Match</h3>
+                </div>
+              </div>
+
+              <form id="match-form" class="stack">
+                <div class="inline-banner" id="match-dashboard-banner" hidden>
+                  <div>
+                    <strong>Assigning this match to a dashboard</strong>
+                    <p class="muted" id="match-dashboard-banner-copy"></p>
+                  </div>
+                  <button type="button" class="ghost" id="clear-match-dashboard-button">Clear</button>
+                </div>
+
+                <div class="form-grid narrow">
+                  <label>
+                    <span>Match Type</span>
+                    <select name="matchType">
+                      <option value="bo3">Best of 3</option>
+                      <option value="bo1">Best of 1</option>
+                    </select>
+                  </label>
+                  <label class="full-width">
+                    <span>Notes</span>
+                    <textarea
+                      name="notes"
+                      rows="3"
+                      placeholder="Optional notes like deck, opponent, venue, or anything you want to remember"
+                    ></textarea>
+                  </label>
+                </div>
+
+                <section class="subpanel">
+                  <div class="subpanel-header">
+                    <h4>Match Signals</h4>
+                    <p>Tick any custom match-level facts that applied.</p>
+                  </div>
+                  <div id="match-signal-fields" class="checkbox-grid"></div>
+                </section>
+
+                <section class="subpanel">
+                  <div class="subpanel-header">
+                    <h4>Games</h4>
+                    <p>
+                      Game 1 player-on-play is random. In later games, the previous game loser chooses.
+                    </p>
+                  </div>
+                  <div class="inline-actions">
+                    <button type="button" class="secondary" id="add-game-button">Add Game</button>
+                    <button type="button" class="ghost" id="reset-games-button">Reset To Match Type</button>
+                  </div>
+                  <div id="games-container" class="stack"></div>
+                </section>
+
+                <div class="form-actions">
+                  <button type="submit">Save Match</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">History</p>
+                  <h3>All Logged Matches</h3>
+                </div>
+              </div>
+              <div id="match-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-signals">
+          <div class="panel-grid two-column">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Config</p>
+                  <h3>Create Signal</h3>
+                </div>
+              </div>
+
+              <form id="signal-form" class="stack">
+                <label>
+                  <span>Signal Name</span>
+                  <input type="text" name="name" placeholder="Played Urza's Saga turn 1" required />
+                </label>
+                <label>
+                  <span>Scope</span>
+                  <select name="scope">
+                    <option value="game">Game</option>
+                    <option value="match">Match</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Description</span>
+                  <textarea
+                    name="description"
+                    rows="3"
+                    placeholder="Optional guidance for when to check this signal"
+                  ></textarea>
+                </label>
+                <div class="form-actions">
+                  <button type="submit">Add Signal</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Library</p>
+                  <h3>Signal Definitions</h3>
+                </div>
+              </div>
+              <div id="signal-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-dashboards">
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Views</p>
+                  <h3>Dashboards</h3>
+                </div>
+              </div>
+
+              <div id="dashboard-directory" class="stack"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Config</p>
+                  <h3>Create Dashboard</h3>
+                </div>
+              </div>
+
+              <form id="dashboard-form" class="stack">
+                <label>
+                  <span>Name</span>
+                  <input type="text" name="name" placeholder="Temur Breach Testing" required />
+                </label>
+                <section class="subpanel">
+                  <div class="subpanel-header">
+                    <h4>Signals To Analyze</h4>
+                    <p>Choose any match or game signals this dashboard should highlight for matches assigned to it.</p>
+                  </div>
+                  <div id="dashboard-signal-picker" class="checkbox-grid"></div>
+                </section>
+
+                <div class="form-actions">
+                  <button type="submit">Save Dashboard</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Flow</p>
+                  <h3>How This Works</h3>
+                </div>
+              </div>
+              <div class="empty-state">
+                Create a dashboard, open it, and use its dedicated log button to add matches directly into that dashboard.
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-dashboard-detail">
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Dashboard</p>
+                  <h3 id="dashboard-detail-title">Dashboard</h3>
+                </div>
+                <div class="inline-actions">
+                  <button type="button" class="secondary" id="dashboard-detail-log-button">Log Match To This Dashboard</button>
+                  <button type="button" class="ghost danger-button" id="dashboard-detail-delete-button">Delete Dashboard</button>
+                  <button type="button" class="ghost" id="dashboard-detail-back-button">Back To Dashboards</button>
+                </div>
+              </div>
+              <p class="muted" id="dashboard-detail-summary"></p>
+              <div id="dashboard-detail-metrics" class="stack"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Membership</p>
+                  <h3>Matches In This Dashboard</h3>
+                </div>
+              </div>
+              <div id="dashboard-detail-matches" class="stack"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="game-card-template">
+      <article class="game-card">
+        <div class="game-card-header">
+          <h4 class="game-title">Game</h4>
+          <button type="button" class="ghost remove-game-button">Remove</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            <span>Who Went First?</span>
+            <select class="game-play-order">
+              <option value="me">I did</option>
+              <option value="opponent">Opponent did</option>
+            </select>
+          </label>
+          <label>
+            <span>Kept Opening Hand</span>
+            <select class="game-opening-hand">
+              <option value="7">7 cards</option>
+              <option value="6">6 cards</option>
+              <option value="5">5 cards</option>
+              <option value="4">4 or fewer</option>
+            </select>
+          </label>
+          <label>
+            <span>Winner</span>
+            <select class="game-winner">
+              <option value="me">I won</option>
+              <option value="opponent">Opponent won</option>
+            </select>
+          </label>
+          <label>
+            <span>Won Opening Roll?</span>
+            <select class="game-coinflip">
+              <option value="">N/A</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+        </div>
+        <div class="game-signals stack"></div>
+      </article>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

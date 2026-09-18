@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.wrangler/
+.DS_Store
+*.log
+*.tgz
+
+# The hosted database is managed by Sites/D1. Keep local match data private.
+data/*.sqlite
+data/*.sqlite-*
