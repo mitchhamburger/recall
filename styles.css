@@ -316,24 +316,17 @@ button.account-logout {
   margin-bottom: 1.5rem;
 }
 
-.hero-stats {
-  display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.hero-copy {
+  max-width: 720px;
 }
 
-.stat-chip {
-  min-width: 110px;
-  padding: 0.8rem 0.95rem;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(48, 35, 22, 0.08);
+.hero-copy .muted {
+  margin: 0.55rem 0 0;
 }
 
-.stat-chip strong {
-  display: block;
-  font-size: 1.15rem;
+.hero-action {
+  align-self: center;
+  flex: 0 0 auto;
 }
 
 .view {

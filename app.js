@@ -23,7 +23,7 @@ const els = {
   logoutButton: document.getElementById("logout-button"),
   navButtons: Array.from(document.querySelectorAll(".nav-button")),
   views: Array.from(document.querySelectorAll(".view")),
-  heroStats: document.getElementById("hero-stats"),
+  overviewCreateDashboardButton: document.getElementById("overview-create-dashboard-button"),
   signalForm: document.getElementById("signal-form"),
   signalList: document.getElementById("signal-list"),
   dashboardForm: document.getElementById("dashboard-form"),
@@ -177,6 +177,7 @@ function bindNavigation() {
   els.navButtons.forEach((button) => {
     button.addEventListener("click", () => setActiveView(button.dataset.view));
   });
+  els.overviewCreateDashboardButton.addEventListener("click", () => setActiveView("dashboards"));
 }
 
 function bindThemePicker() {
@@ -423,7 +424,6 @@ function getSignalsByScope(scope) {
 }
 
 function render() {
-  renderHeroStats();
   renderSignalList();
   renderDashboardSignalPicker();
   renderMatchSignalFields();
@@ -435,24 +435,6 @@ function render() {
   renderDashboardHighlights();
   renderDashboardDetail();
   renderMatchDashboardBanner();
-}
-
-function renderHeroStats() {
-  if (state.loading) {
-    els.heroStats.innerHTML = statChip("Status", "Loading");
-    return;
-  }
-
-  const matches = state.matches.length;
-  const games = state.matches.reduce((sum, match) => sum + match.games.length, 0);
-  const matchWins = state.matches.filter((match) => match.winner === "me").length;
-  const winRate = matches === 0 ? "0%" : `${Math.round((matchWins / matches) * 100)}%`;
-
-  els.heroStats.innerHTML = [
-    statChip("Matches", matches),
-    statChip("Games", games),
-    statChip("Match Win Rate", winRate),
-  ].join("");
 }
 
 function renderSignalList() {
@@ -559,7 +541,7 @@ function renderOverviewDashboards() {
   }
 
   if (state.dashboards.length === 0) {
-    els.overviewDashboardList.innerHTML = emptyState("No dashboards created yet.");
+    els.overviewDashboardList.innerHTML = emptyState("Create a dashboard to organize your analysis.");
     return;
   }
 
@@ -598,7 +580,9 @@ function renderOverviewDashboardHero() {
   }
 
   if (state.dashboards.length === 0) {
-    els.overviewDashboardHero.innerHTML = emptyState("No dashboards created yet.");
+    els.overviewDashboardHero.innerHTML = emptyState(
+      "No dashboard results yet. Create a dashboard, then log matches directly to it.",
+    );
     return;
   }
 
@@ -648,7 +632,9 @@ function renderDashboardHighlights() {
   }
 
   if (state.dashboards.length === 0) {
-    els.dashboardHighlights.innerHTML = emptyState("No dashboards created yet.");
+    els.dashboardHighlights.innerHTML = emptyState(
+      "Highlights will appear after you create dashboards and assign matches to them.",
+    );
     return;
   }
 
@@ -939,15 +925,6 @@ function createCheckboxCard({ name, title, description }) {
   return wrapper;
 }
 
-function statChip(label, value) {
-  return `
-    <article class="stat-chip">
-      <span class="muted">${label}</span>
-      <strong>${value}</strong>
-    </article>
-  `;
-}
-
 function percent(wins, total) {
   if (!total) {
     return "0%";
@@ -960,7 +937,6 @@ function emptyState(message) {
 }
 
 function showAppError(message) {
-  els.heroStats.innerHTML = statChip("Status", "Offline");
   const errorState = emptyState(message);
   els.overviewDashboardList.innerHTML = errorState;
   els.dashboardHighlights.innerHTML = errorState;

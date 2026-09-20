@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=auth-1" />
+    <link rel="stylesheet" href="./styles.css?v=overview-1" />
   </head>
   <body data-theme="ledger">
     <main class="auth-shell" id="auth-shell">
@@ -99,11 +99,16 @@
 
       <main class="main-content">
         <section class="hero">
-          <div>
-            <p class="eyebrow">Personal-use MVP</p>
-            <h2>Track what happened, then test whether it mattered.</h2>
+          <div class="hero-copy">
+            <p class="eyebrow">Dashboard-first analysis</p>
+            <h2>Every statistic belongs to a dashboard.</h2>
+            <p class="muted">
+              Assign matches to a dashboard to keep each deck, format, or testing question in its own view.
+            </p>
           </div>
-          <div class="hero-stats" id="hero-stats"></div>
+          <button type="button" class="hero-action" id="overview-create-dashboard-button">
+            Create Dashboard
+          </button>
         </section>
 
         <section class="view active" id="view-overview">
@@ -111,8 +116,8 @@
             <article class="panel">
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">Overview</p>
-                  <h3>All Dashboards</h3>
+                  <p class="eyebrow">Your Analysis</p>
+                  <h3>Dashboard Results</h3>
                 </div>
               </div>
               <div id="overview-dashboard-hero" class="metric-grid"></div>
@@ -121,7 +126,7 @@
             <article class="panel">
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">Highlights</p>
+                  <p class="eyebrow">Across Your Dashboards</p>
                   <h3>Dashboard Standouts</h3>
                 </div>
               </div>
@@ -132,7 +137,7 @@
               <div class="panel-header">
                 <div>
                   <p class="eyebrow">Directory</p>
-                  <h3>Dashboard Breakdown</h3>
+                  <h3>Open A Dashboard</h3>
                 </div>
               </div>
               <div id="overview-dashboard-list"></div>
@@ -394,6 +399,6 @@
       </article>
     </template>
 
-    <script type="module" src="./app.js?v=auth-1"></script>
+    <script type="module" src="./app.js?v=overview-1"></script>
   </body>
 </html>
