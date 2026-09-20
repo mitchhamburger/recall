@@ -1,11 +1,11 @@
 # Recall
 
-`Recall` is a lightweight web app for tracking Magic: The Gathering match results and analyzing whether custom in-game signals correlate with winning. It runs as a small Node server backed by SQLite and is configured for Git-based deployment on Render.
+`Recall` is a Vue application for tracking Magic: The Gathering match results and analyzing whether custom in-game signals correlate with winning. It uses Vue Router for page navigation and a small Node/SQLite API for persistence.
 
-## What this first version does
+## What it does
 
 - Create reusable custom signals at either the `match` or `game` level
-- Log BO1 or BO3 matches quickly with notes and per-game outcomes
+- Log BO1, BO3, or BO5 matches through a guided modal with notes and per-game outcomes
 - Create dashboards and assign matches directly into them from each dashboard's dedicated page
 - Compare win rates when a chosen signal was present versus absent
 - Create an account and keep dashboards, signals, matches, and statistics private
@@ -15,21 +15,31 @@
 
 - [index.html](/Users/papichulo/Projects/Recall/index.html)
 - [styles.css](/Users/papichulo/Projects/Recall/styles.css)
-- [app.js](/Users/papichulo/Projects/Recall/app.js)
+- [src](/Users/papichulo/Projects/Recall/src)
+- [vite.config.js](/Users/papichulo/Projects/Recall/vite.config.js)
 - [server.js](/Users/papichulo/Projects/Recall/server.js)
 - [render.yaml](/Users/papichulo/Projects/Recall/render.yaml)
 - [package.json](/Users/papichulo/Projects/Recall/package.json)
 
 ## Running it
 
-Install dependencies and start the local app server:
+Install dependencies and start the Vite frontend and Node API together:
 
 ```bash
 npm install
+npm run dev
+```
+
+Then visit [http://127.0.0.1:5173](http://127.0.0.1:5173). Vite proxies `/api` requests to the Node server on port 3000.
+
+To run the production build locally:
+
+```bash
+npm run build
 npm start
 ```
 
-Then visit [http://localhost:3000](http://localhost:3000).
+The Node server serves the built single-page application from `dist` and falls back to `index.html` for Vue Router URLs.
 
 The local database is stored at `data/recall.sqlite` and intentionally excluded from Git. On a new server, the checked-in SQL migrations create the database and import the original dataset.
 

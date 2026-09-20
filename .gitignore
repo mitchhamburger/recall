@@ -5,6 +5,6 @@ dist/
 *.log
 *.tgz
 
-# The hosted database is managed by Sites/D1. Keep local match data private.
+# Keep local SQLite data private; Render stores production data on its persistent disk.
 data/*.sqlite
 data/*.sqlite-*

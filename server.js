@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
@@ -8,12 +8,7 @@ import { promisify } from "node:util";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.resolve(process.env.DB_PATH || path.join(__dirname, "data", "recall.sqlite"));
-const publicFiles = new Map([
-  ["/", ["index.html", "text/html; charset=utf-8"]],
-  ["/index.html", ["index.html", "text/html; charset=utf-8"]],
-  ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
-  ["/app.js", ["app.js", "application/javascript; charset=utf-8"]],
-]);
+const distDir = path.join(__dirname, "dist");
 
 mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new DatabaseSync(dbPath);
@@ -67,15 +62,8 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 201, createMatch(user.id, await readJsonBody(request)));
     }
 
-    const publicFile = publicFiles.get(url.pathname);
-    if (publicFile && request.method === "GET") {
-      const [fileName, contentType] = publicFile;
-      response.writeHead(200, {
-        "Content-Type": contentType,
-        "Cache-Control": "no-cache",
-      });
-      response.end(readFileSync(path.join(__dirname, fileName)));
-      return;
+    if (request.method === "GET" && !url.pathname.startsWith("/api/")) {
+      return sendFrontendFile(response, url.pathname);
     }
 
     sendJson(response, 404, { error: "Not found" });
@@ -124,6 +112,11 @@ function initializeDatabase() {
     .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'users'")
     .get();
   if (!hasUsers) runMigration("drizzle/0003_add_auth.sql");
+
+  const matchColumns = db.prepare("PRAGMA table_info(matches)").all();
+  if (!matchColumns.some((column) => column.name === "opening_roll_winner")) {
+    runMigration("drizzle/0004_guided_match_fields.sql");
+  }
 }
 
 function runMigration(relativePath) {
@@ -316,7 +309,8 @@ function listDashboards(userId) {
 function listMatches(userId) {
   const matchRows = db
     .prepare(
-      `SELECT id, date, deck, opponent, format, play_mode, match_type, tags_json, notes, winner, signals_json
+      `SELECT id, date, deck, opponent, format, play_mode, match_type, tags_json, notes, winner, signals_json,
+              opening_roll_winner
        FROM matches
        WHERE user_id = ?
        ORDER BY date DESC, created_at DESC, rowid DESC`,
@@ -363,6 +357,7 @@ function listMatches(userId) {
     format: match.format,
     playMode: match.play_mode,
     matchType: match.match_type,
+    openingRollWinner: match.opening_roll_winner,
     tags: JSON.parse(match.tags_json),
     notes: match.notes,
     winner: match.winner,
@@ -422,9 +417,22 @@ function deleteDashboard(userId, dashboardId) {
 }
 
 function createMatch(userId, body) {
-  assert(body.matchType === "bo1" || body.matchType === "bo3", "Match type must be `bo1` or `bo3`.");
+  assert(["bo1", "bo3", "bo5"].includes(body.matchType), "Match type must be `bo1`, `bo3`, or `bo5`.");
+  assert(
+    body.openingRollWinner === "me" || body.openingRollWinner === "opponent",
+    "Opening roll winner is required.",
+  );
   assert(Array.isArray(body.games) && body.games.length > 0, "At least one game is required.");
   const games = body.games.map(sanitizeGame);
+  const gamesToWin = { bo1: 1, bo3: 2, bo5: 3 }[body.matchType];
+  const myWins = games.filter((game) => game.winner === "me").length;
+  const opponentWins = games.filter((game) => game.winner === "opponent").length;
+  assert(
+    (myWins === gamesToWin && opponentWins < gamesToWin) ||
+      (opponentWins === gamesToWin && myWins < gamesToWin),
+    "The submitted games do not contain a completed match.",
+  );
+  assert(games.length <= gamesToWin * 2 - 1, "Too many games were submitted for this match type.");
   const dashboardIds = Array.isArray(body.dashboardIds) ? body.dashboardIds.map(String) : [];
   assertOwnedIds("dashboards", dashboardIds, userId, "One or more selected dashboards are unavailable.");
   assertOwnedSignalMap(userId, body.signals || {}, "match");
@@ -437,6 +445,7 @@ function createMatch(userId, body) {
     format: String(body.format || "").trim(),
     playMode: String(body.playMode || "").trim(),
     matchType: body.matchType,
+    openingRollWinner: body.openingRollWinner,
     tags: Array.isArray(body.tags) ? body.tags.map(String) : [],
     notes: String(body.notes || "").trim(),
     winner: deriveMatchWinner(games),
@@ -448,8 +457,9 @@ function createMatch(userId, body) {
   runInTransaction(() => {
     db.prepare(
       `INSERT INTO matches
-       (id, date, deck, opponent, format, play_mode, match_type, tags_json, notes, winner, signals_json, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, date, deck, opponent, format, play_mode, match_type, tags_json, notes, winner, signals_json, user_id,
+        opening_roll_winner)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       match.id,
       match.date,
@@ -463,6 +473,7 @@ function createMatch(userId, body) {
       match.winner,
       JSON.stringify(match.signals),
       userId,
+      match.openingRollWinner,
     );
 
     const insertGame = db.prepare(
@@ -567,6 +578,34 @@ function addSecurityHeaders(response) {
   response.setHeader("X-Frame-Options", "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+}
+
+function sendFrontendFile(response, pathname) {
+  const requestedPath = path.resolve(distDir, `.${pathname}`);
+  const isInsideDist = requestedPath === distDir || requestedPath.startsWith(`${distDir}${path.sep}`);
+  const filePath =
+    isInsideDist && existsSync(requestedPath) && statSync(requestedPath).isFile()
+      ? requestedPath
+      : path.join(distDir, "index.html");
+
+  if (!existsSync(filePath)) {
+    throw new HttpError(503, "The frontend has not been built. Run `npm run build` first.");
+  }
+
+  const extension = path.extname(filePath);
+  const contentTypes = {
+    ".css": "text/css; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+  };
+  const immutable = filePath.includes(`${path.sep}assets${path.sep}`);
+  response.writeHead(200, {
+    "Content-Type": contentTypes[extension] || "application/octet-stream",
+    "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
+  });
+  response.end(readFileSync(filePath));
 }
 
 function getLocalDateString() {
