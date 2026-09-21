@@ -80,6 +80,14 @@ async function createDashboard(dashboard) {
   return created;
 }
 
+async function createDashboardSignal(dashboardId, signal) {
+  await apiRequest(`/api/dashboards/${encodeURIComponent(dashboardId)}/signals`, {
+    method: "POST",
+    body: JSON.stringify(signal),
+  });
+  await refresh();
+}
+
 async function deleteDashboard(id) {
   await apiRequest(`/api/dashboards/${encodeURIComponent(id)}`, { method: "DELETE" });
   await refresh();
@@ -104,6 +112,7 @@ export const recallStore = {
   logout,
   createSignal,
   createDashboard,
+  createDashboardSignal,
   deleteDashboard,
   createMatch,
 };

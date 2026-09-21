@@ -7,9 +7,10 @@ const saving = ref(false);
 const error = ref("");
 const query = ref("");
 const scopeFilter = ref("all");
+const universalSignals = computed(() => recallStore.state.signals.filter((signal) => !signal.dashboardId));
 const filteredSignals = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase();
-  return recallStore.state.signals.filter(
+  return universalSignals.value.filter(
     (signal) =>
       (scopeFilter.value === "all" || signal.scope === scopeFilter.value) &&
       (!normalizedQuery || `${signal.name} ${signal.description}`.toLowerCase().includes(normalizedQuery)),
@@ -34,11 +35,12 @@ async function submit() {
   <div class="panel-grid two-column">
     <article class="panel">
       <div class="panel-header">
-        <div><p class="eyebrow">Config</p><h3>Create Signal</h3></div>
+        <div><p class="eyebrow">Universal Library</p><h3>Create Reusable Signal</h3></div>
       </div>
+      <p class="muted">Universal signals are available whenever you log a match, regardless of dashboard.</p>
       <p v-if="error" class="auth-message" role="alert">{{ error }}</p>
       <form class="stack" @submit.prevent="submit">
-        <label><span>Signal Name</span><input v-model="form.name" type="text" placeholder="Played Urza's Saga turn 1" required /></label>
+        <label><span>Signal Name</span><input v-model="form.name" type="text" placeholder="I mulliganed twice" required /></label>
         <label>
           <span>Scope</span>
           <select v-model="form.scope"><option value="game">Game</option><option value="match">Match</option></select>
@@ -49,8 +51,8 @@ async function submit() {
     </article>
 
     <article class="panel">
-      <div class="panel-header"><div><p class="eyebrow">Library</p><h3>Signal Definitions</h3></div></div>
-      <div v-if="recallStore.state.signals.length" class="view-controls signal-controls">
+      <div class="panel-header"><div><p class="eyebrow">Reusable Everywhere</p><h3>Universal Signals</h3></div></div>
+      <div v-if="universalSignals.length" class="view-controls signal-controls">
         <label class="search-control"><span class="sr-only">Search signals</span><input v-model="query" type="search" placeholder="Search signals…" /></label>
         <div class="segmented-control" aria-label="Signal scope filter">
           <button
@@ -64,7 +66,7 @@ async function submit() {
           </button>
         </div>
       </div>
-      <div v-if="!recallStore.state.signals.length" class="empty-state">No signals yet.</div>
+      <div v-if="!universalSignals.length" class="empty-state">No universal signals yet. Dashboard-specific signals are created inside each dashboard.</div>
       <div v-else-if="!filteredSignals.length" class="empty-state">No signals match those controls.</div>
       <TransitionGroup v-else name="card-list" tag="div" class="stack">
         <article v-for="signal in filteredSignals" :key="signal.id" class="list-card">

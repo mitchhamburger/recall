@@ -32,7 +32,7 @@ async function submit() {
   <main class="auth-shell">
     <section class="auth-card">
       <div class="auth-brand">
-        <p class="eyebrow">MTG Stats Tracker</p>
+        <p class="eyebrow">TCG Stats Tracker</p>
         <h1>Recall</h1>
         <p>Sign in to keep your dashboards, signals, and match history private.</p>
       </div>

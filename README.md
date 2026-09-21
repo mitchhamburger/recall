@@ -1,10 +1,11 @@
 # Recall
 
-`Recall` is a Vue application for tracking Magic: The Gathering match results and analyzing whether custom in-game signals correlate with winning. It uses Vue Router for page navigation and a small Node/SQLite API for persistence.
+`Recall` is a Vue application for tracking trading card game match results and analyzing whether custom in-game signals correlate with winning. It uses Vue Router for page navigation and a small Node/SQLite API for persistence.
 
 ## What it does
 
-- Create reusable custom signals at either the `match` or `game` level
+- Create universal reusable signals at either the `match` or `game` level
+- Define dashboard-specific signals that appear only in that dashboard's logging and analysis
 - Log BO1, BO3, or BO5 matches through a guided modal with notes and per-game outcomes
 - Create dashboards and assign matches directly into them from each dashboard's dedicated page
 - Compare win rates when a chosen signal was present versus absent
@@ -60,4 +61,4 @@ later accounts start empty.
 - Add exports/imports so your friend group can share datasets
 - Add password reset and email verification before wider public distribution
 - Support adding one match to multiple dashboards from the UI
-- Add more MTG-specific built-ins like mulligan decisions, sideboard plans, and on-the-play win rate
+- Add more TCG-wide built-ins like mulligan decisions, sideboard plans, and on-the-play win rate

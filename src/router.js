@@ -47,8 +47,8 @@ const routes = [
         component: SignalsView,
         meta: {
           eyebrow: "Signal library",
-          title: "Define the moments you want to measure.",
-          description: "Create reusable match- and game-level observations for dashboard analysis.",
+          title: "Define observations you reuse everywhere.",
+          description: "Universal signals follow every match. Dashboard-specific signals stay inside their dashboard.",
         },
       },
       {
@@ -58,7 +58,7 @@ const routes = [
         meta: {
           eyebrow: "Analysis workspace",
           title: "Build a focused view for every question.",
-          description: "Choose the signals that matter, then send relevant matches directly to that dashboard.",
+          description: "Create a dashboard and define the signals that belong only to that analysis.",
         },
       },
       {

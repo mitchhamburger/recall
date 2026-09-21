@@ -54,6 +54,14 @@ const server = createServer(async (request, response) => {
     if (url.pathname === "/api/dashboards" && request.method === "POST") {
       return sendJson(response, 201, createDashboard(user.id, await readJsonBody(request)));
     }
+    const dashboardSignalRoute = url.pathname.match(/^\/api\/dashboards\/([^/]+)\/signals$/);
+    if (dashboardSignalRoute && request.method === "POST") {
+      return sendJson(
+        response,
+        201,
+        createDashboardSignal(user.id, decodeURIComponent(dashboardSignalRoute[1]), await readJsonBody(request)),
+      );
+    }
     if (url.pathname.startsWith("/api/dashboards/") && request.method === "DELETE") {
       deleteDashboard(user.id, decodeURIComponent(url.pathname.split("/").pop()));
       return sendJson(response, 200, { ok: true });
@@ -117,6 +125,19 @@ function initializeDatabase() {
   if (!matchColumns.some((column) => column.name === "opening_roll_winner")) {
     runMigration("drizzle/0004_guided_match_fields.sql");
   }
+
+  const signalColumns = db.prepare("PRAGMA table_info(signals)").all();
+  if (!signalColumns.some((column) => column.name === "dashboard_id")) {
+    runMigration("drizzle/0005_signal_ownership.sql");
+  }
+
+  const hasMigrationTable = db
+    .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'app_migrations'")
+    .get();
+  const hasLocalizedLegacySignals = hasMigrationTable
+    ? db.prepare("SELECT 1 AS found FROM app_migrations WHERE name = ?").get("0006_localize_legacy_signals")
+    : null;
+  if (!hasLocalizedLegacySignals) runMigration("drizzle/0006_localize_legacy_signals.sql");
 }
 
 function runMigration(relativePath) {
@@ -277,16 +298,28 @@ function publicUser(user) {
 
 function listSignals(userId) {
   return db
-    .prepare("SELECT id, name, scope, description FROM signals WHERE user_id = ? ORDER BY created_at DESC, rowid DESC")
-    .all(userId);
+    .prepare(
+      `SELECT id, name, scope, description, dashboard_id
+       FROM signals
+       WHERE user_id = ?
+       ORDER BY created_at DESC, rowid DESC`,
+    )
+    .all(userId)
+    .map((signal) => ({
+      id: signal.id,
+      name: signal.name,
+      scope: signal.scope,
+      description: signal.description,
+      dashboardId: signal.dashboard_id,
+    }));
 }
 
 function listDashboards(userId) {
   const rows = db
     .prepare(
-      `SELECT d.id, d.name, d.filters_json, ds.signal_id
+      `SELECT d.id, d.name, d.filters_json, s.id AS signal_id
        FROM dashboards d
-       LEFT JOIN dashboard_signals ds ON ds.dashboard_id = d.id
+       LEFT JOIN signals s ON s.dashboard_id = d.id
        WHERE d.user_id = ?
        ORDER BY d.created_at DESC, d.rowid DESC`,
     )
@@ -368,33 +401,16 @@ function listMatches(userId) {
 }
 
 function createSignal(userId, body) {
-  assert(body.name, "Signal name is required.");
-  assert(body.scope === "match" || body.scope === "game", "Signal scope must be `match` or `game`.");
-  const signal = {
-    id: crypto.randomUUID(),
-    name: String(body.name).trim(),
-    scope: body.scope,
-    description: String(body.description || "").trim(),
-  };
-  assert(signal.name, "Signal name is required.");
-  db.prepare("INSERT INTO signals (id, name, scope, description, user_id) VALUES (?, ?, ?, ?, ?)").run(
-    signal.id,
-    signal.name,
-    signal.scope,
-    signal.description,
-    userId,
-  );
-  return signal;
+  return insertSignal(userId, null, body);
 }
 
 function createDashboard(userId, body) {
   assert(body.name, "Dashboard name is required.");
   const name = String(body.name).trim();
-  const signalIds = Array.isArray(body.signalIds) ? body.signalIds.map(String) : [];
+  const signals = Array.isArray(body.signals) ? body.signals.map(sanitizeSignalDefinition) : [];
   const id = crypto.randomUUID();
   const filters = { deck: "", opponent: "", playMode: "", format: "", tag: "" };
-
-  assertOwnedIds("signals", signalIds, userId, "One or more selected signals are unavailable.");
+  const signalIds = [];
 
   runInTransaction(() => {
     db.prepare("INSERT INTO dashboards (id, name, filters_json, user_id) VALUES (?, ?, ?, ?)").run(
@@ -403,10 +419,34 @@ function createDashboard(userId, body) {
       JSON.stringify(filters),
       userId,
     );
-    const insert = db.prepare("INSERT INTO dashboard_signals (dashboard_id, signal_id) VALUES (?, ?)");
-    for (const signalId of signalIds) insert.run(id, signalId);
+    for (const signal of signals) signalIds.push(insertSignal(userId, id, signal).id);
   });
   return { id, name, filters, signalIds };
+}
+
+function createDashboardSignal(userId, dashboardId, body) {
+  const dashboard = db.prepare("SELECT id FROM dashboards WHERE id = ? AND user_id = ?").get(dashboardId, userId);
+  if (!dashboard) throw new HttpError(404, "Dashboard not found.");
+  return insertSignal(userId, dashboardId, body);
+}
+
+function insertSignal(userId, dashboardId, body) {
+  const signal = { id: crypto.randomUUID(), ...sanitizeSignalDefinition(body), dashboardId };
+  db.prepare(
+    "INSERT INTO signals (id, name, scope, description, user_id, dashboard_id) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(signal.id, signal.name, signal.scope, signal.description, userId, dashboardId);
+  return signal;
+}
+
+function sanitizeSignalDefinition(body) {
+  const signal = {
+    name: String(body?.name || "").trim(),
+    scope: body?.scope,
+    description: String(body?.description || "").trim(),
+  };
+  assert(signal.name, "Signal name is required.");
+  assert(signal.scope === "match" || signal.scope === "game", "Signal scope must be `match` or `game`.");
+  return signal;
 }
 
 function deleteDashboard(userId, dashboardId) {
@@ -435,8 +475,8 @@ function createMatch(userId, body) {
   assert(games.length <= gamesToWin * 2 - 1, "Too many games were submitted for this match type.");
   const dashboardIds = Array.isArray(body.dashboardIds) ? body.dashboardIds.map(String) : [];
   assertOwnedIds("dashboards", dashboardIds, userId, "One or more selected dashboards are unavailable.");
-  assertOwnedSignalMap(userId, body.signals || {}, "match");
-  for (const game of body.games) assertOwnedSignalMap(userId, game.signals || {}, "game");
+  assertAvailableSignalMap(userId, dashboardIds, body.signals || {}, "match");
+  for (const game of body.games) assertAvailableSignalMap(userId, dashboardIds, game.signals || {}, "game");
   const match = {
     id: crypto.randomUUID(),
     date: String(body.date || getLocalDateString()),
@@ -512,13 +552,18 @@ function assertOwnedIds(table, ids, userId, message) {
   if (count !== new Set(ids).size) throw new HttpError(400, message);
 }
 
-function assertOwnedSignalMap(userId, signalMap, scope) {
+function assertAvailableSignalMap(userId, dashboardIds, signalMap, scope) {
   const ids = Object.keys(signalMap);
   if (ids.length === 0) return;
-  const placeholders = ids.map(() => "?").join(",");
+  const signalPlaceholders = ids.map(() => "?").join(",");
+  const dashboardPlaceholders = dashboardIds.map(() => "?").join(",");
+  const availability = dashboardIds.length
+    ? `(dashboard_id IS NULL OR dashboard_id IN (${dashboardPlaceholders}))`
+    : "dashboard_id IS NULL";
   const count = db.prepare(
-    `SELECT COUNT(*) AS count FROM signals WHERE user_id = ? AND scope = ? AND id IN (${placeholders})`,
-  ).get(userId, scope, ...ids).count;
+    `SELECT COUNT(*) AS count FROM signals
+     WHERE user_id = ? AND scope = ? AND ${availability} AND id IN (${signalPlaceholders})`,
+  ).get(userId, scope, ...dashboardIds, ...ids).count;
   if (count !== new Set(ids).size) throw new HttpError(400, "One or more signals are unavailable.");
 }
 

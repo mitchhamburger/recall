@@ -1,11 +1,10 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { recallStore } from "../store.js";
 
 const route = useRoute();
 const router = useRouter();
-const theme = ref("ledger");
 const navItems = [
   { name: "overview", label: "Overview" },
   { name: "matches", label: "Log Matches" },
@@ -19,18 +18,6 @@ const hero = computed(() => ({
   description: route.meta.description || "",
 }));
 
-onMounted(() => {
-  theme.value = localStorage.getItem("recall-theme") || "ledger";
-  applyTheme(theme.value);
-});
-
-watch(theme, applyTheme);
-
-function applyTheme(value) {
-  document.body.dataset.theme = value;
-  localStorage.setItem("recall-theme", value);
-}
-
 async function signOut() {
   await recallStore.logout();
   await router.push({ name: "login" });
@@ -41,7 +28,7 @@ async function signOut() {
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <p class="eyebrow">MTG Stats Tracker</p>
+        <p class="eyebrow">TCG Stats Tracker</p>
         <h1>Recall</h1>
         <p class="brand-copy">Log matches, define signals, and inspect what actually correlates with wins.</p>
       </div>
@@ -69,27 +56,11 @@ async function signOut() {
       </section>
 
       <section class="sidebar-panel">
-        <h2>Visual Style</h2>
-        <div class="theme-picker">
-          <button
-            v-for="option in ['embers', 'ledger', 'nightfall']"
-            :key="option"
-            type="button"
-            class="theme-button"
-            :class="{ active: theme === option }"
-            @click="theme = option"
-          >
-            {{ option[0].toUpperCase() + option.slice(1) }}
-          </button>
-        </div>
-      </section>
-
-      <section class="sidebar-panel">
         <h2>Quick Notes</h2>
         <ul class="compact-list">
-          <li>Match signals apply once per match.</li>
-          <li>Game signals can be checked separately for each game.</li>
-          <li>Dashboard statistics only use matches assigned to that dashboard.</li>
+          <li>Universal signals are reusable across every dashboard.</li>
+          <li>Dashboard signals stay local to that analysis.</li>
+          <li>Match and game scope controls when each signal is checked.</li>
         </ul>
       </section>
     </aside>

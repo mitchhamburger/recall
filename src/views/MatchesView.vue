@@ -15,17 +15,22 @@ const setup = reactive({ gamesToWin: 2, openingRollWinner: "me", notes: "", sign
 const completedGames = ref([]);
 const currentGame = reactive(makeGame());
 
-const matchSignals = computed(() => recallStore.state.signals.filter((signal) => signal.scope === "match"));
+const selectedDashboard = computed(() =>
+  recallStore.state.dashboards.find((dashboard) => dashboard.id === route.query.dashboard),
+);
+const availableSignals = computed(() =>
+  recallStore.state.signals.filter(
+    (signal) => !signal.dashboardId || signal.dashboardId === selectedDashboard.value?.id,
+  ),
+);
+const matchSignals = computed(() => availableSignals.value.filter((signal) => signal.scope === "match"));
 const openingRollSignal = computed(() =>
   matchSignals.value.find((signal) => signal.name.trim().toLowerCase() === "won the opening roll"),
 );
 const manualMatchSignals = computed(() =>
   matchSignals.value.filter((signal) => signal.id !== openingRollSignal.value?.id),
 );
-const gameSignals = computed(() => recallStore.state.signals.filter((signal) => signal.scope === "game"));
-const selectedDashboard = computed(() =>
-  recallStore.state.dashboards.find((dashboard) => dashboard.id === route.query.dashboard),
-);
+const gameSignals = computed(() => availableSignals.value.filter((signal) => signal.scope === "game"));
 const matchType = computed(() => `bo${setup.gamesToWin * 2 - 1}`);
 const score = computed(() => ({
   me: completedGames.value.filter((game) => game.winner === "me").length,
@@ -231,7 +236,7 @@ async function saveMatch() {
           <div class="guided-section-copy">
             <span class="step-kicker">Optional</span>
             <h4>Match-level signals</h4>
-            <p class="muted">Opening-roll tracking is automatic. Check any other facts that apply to the whole match.</p>
+            <p class="muted">Opening-roll tracking is automatic. Universal{{ selectedDashboard ? " and dashboard-specific" : "" }} signals available for this match appear here.</p>
           </div>
           <div class="checkbox-grid">
             <label v-for="signal in manualMatchSignals" :key="signal.id" class="checkbox-card">
@@ -300,7 +305,7 @@ async function saveMatch() {
           </fieldset>
 
           <section>
-            <div class="subpanel-header"><h4>What happened this game?</h4><p>These selections reset after you submit the game.</p></div>
+            <div class="subpanel-header"><h4>What happened this game?</h4><p>Universal{{ selectedDashboard ? " + dashboard-specific" : "" }} · resets after submit</p></div>
             <div v-if="!gameSignals.length" class="empty-state">No game-level signals yet.</div>
             <div v-else class="checkbox-grid game-signal-grid">
               <label v-for="signal in gameSignals" :key="signal.id" class="checkbox-card">

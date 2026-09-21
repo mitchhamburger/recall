@@ -425,26 +425,6 @@ button.account-logout {
   background: rgba(164, 58, 35, 0.08);
 }
 
-.theme-picker {
-  display: grid;
-  gap: 0.55rem;
-  margin-top: 0.85rem;
-}
-
-.theme-button {
-  width: 100%;
-  text-align: left;
-  background: color-mix(in srgb, var(--panel) 30%, transparent);
-  color: var(--sidebar-ink);
-  border: 1px solid var(--line);
-}
-
-.theme-button.active {
-  background: var(--accent);
-  color: white;
-  border-color: transparent;
-}
-
 .danger-button {
   color: var(--accent-strong);
   border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
@@ -454,6 +434,46 @@ button.account-logout {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dashboard-signal-builder,
+.dashboard-signal-manager {
+  display: grid;
+  gap: 1rem;
+}
+
+.signal-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.35fr) auto;
+  gap: 0.8rem;
+  align-items: end;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+}
+
+.signal-composer .full-width {
+  grid-column: 1 / 3;
+}
+
+.signal-composer button {
+  min-height: 48px;
+}
+
+.staged-signal-list {
+  gap: 0.65rem;
+}
+
+.compact-list-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.compact-list-card p {
+  margin: 0.2rem 0 0;
 }
 
 .checkbox-card {
@@ -875,6 +895,18 @@ button.modal-close {
 
 .match-log-dialog[open]::backdrop {
   animation: backdrop-enter 180ms ease-out;
+}
+
+.dashboard-create-dialog {
+  width: min(940px, calc(100vw - 2rem));
+}
+
+.dashboard-create-form {
+  margin-top: 1.25rem;
+}
+
+.dashboard-create-form > label:first-child {
+  max-width: 560px;
 }
 
 @keyframes modal-enter {
@@ -1309,7 +1341,8 @@ button.modal-close {
 
   .view-controls,
   .analysis-toolbar,
-  .signal-card-actions {
+  .signal-card-actions,
+  .dashboard-directory-header {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1320,6 +1353,15 @@ button.modal-close {
 
   .guided-section {
     grid-template-columns: 1fr;
+  }
+
+  .signal-composer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .signal-composer .full-width,
+  .signal-composer button {
+    grid-column: 1 / -1;
   }
 
   .match-launcher {
