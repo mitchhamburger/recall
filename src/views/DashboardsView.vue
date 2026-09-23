@@ -1,11 +1,12 @@
 <script setup>
-import { computed, nextTick, reactive, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import DashboardCard from "../components/DashboardCard.vue";
 import { recallStore } from "../store.js";
 import { dashboardSummary } from "../utils/metrics.js";
 
 const router = useRouter();
+const route = useRoute();
 const dashboardDialog = ref(null);
 const form = reactive({ name: "", signals: [] });
 const signalDraft = reactive({ name: "", scope: "game", description: "" });
@@ -15,6 +16,15 @@ const summaries = computed(() =>
   recallStore.state.dashboards.map((dashboard) => dashboardSummary(dashboard, recallStore.state.matches)),
 );
 const hasDashboardDraft = computed(() => Boolean(form.name.trim() || form.signals.length || signalDraft.name.trim()));
+
+watch(
+  () => route.query.create,
+  (value) => { if (value === "1") openDashboardCreator(); },
+);
+
+onMounted(() => {
+  if (route.query.create === "1") openDashboardCreator();
+});
 
 async function openDashboardCreator() {
   await nextTick();

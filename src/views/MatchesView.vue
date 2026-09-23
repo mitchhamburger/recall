@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import MatchCard from "../components/MatchCard.vue";
 import { recallStore } from "../store.js";
@@ -42,8 +42,13 @@ const matchComplete = computed(
 const matchWinner = computed(() => (score.value.me >= setup.gamesToWin ? "me" : "opponent"));
 const selectedGameSignalCount = computed(() => Object.values(currentGame.signals).filter(Boolean).length);
 
+watch(
+  () => [route.query.dashboard, route.query.new],
+  ([dashboardId, newMatch]) => { if (dashboardId || newMatch === "1") openLogger(); },
+);
+
 onMounted(() => {
-  if (route.query.dashboard) openLogger();
+  if (route.query.dashboard || route.query.new === "1") openLogger();
 });
 
 async function openLogger() {

@@ -12,7 +12,7 @@ defineProps({ summary: { type: Object, required: true }, detailed: { type: Boole
         <h4>{{ summary.dashboard.name }}</h4>
         <p class="muted">{{ summary.matchesPlayed }} matches in this dashboard</p>
       </div>
-      <span class="pill">{{ summary.gameWinRateLabel }} game WR</span>
+      <span class="pill">{{ summary.winRateLabel }} Match WR</span>
     </div>
     <div v-if="detailed" class="dashboard-summary-stats">
       <div class="stat-block">

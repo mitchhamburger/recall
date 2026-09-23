@@ -1,15 +1,20 @@
 <script setup>
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { recallStore } from "../store.js";
 
 const route = useRoute();
 const router = useRouter();
+const commandDialog = ref(null);
+const commandSearch = ref(null);
+const commandQuery = ref("");
+const activeCommandIndex = ref(0);
+const universalSignalCount = computed(() => recallStore.state.signals.filter((signal) => !signal.dashboardId).length);
 const navItems = [
-  { name: "overview", label: "Overview" },
-  { name: "matches", label: "Log Matches" },
-  { name: "signals", label: "Signals" },
-  { name: "dashboards", label: "Dashboards" },
+  { name: "overview", label: "Home", icon: "⌂" },
+  { name: "matches", label: "Log Matches", icon: "＋" },
+  { name: "signals", label: "Signals", icon: "◇" },
+  { name: "dashboards", label: "Dashboards", icon: "▦" },
 ];
 
 const hero = computed(() => ({
@@ -17,6 +22,53 @@ const hero = computed(() => ({
   title: route.meta.title || "Track what matters.",
   description: route.meta.description || "",
 }));
+const commands = computed(() => [
+  { label: "Log a new match", detail: "Open guided match entry", icon: "＋", to: { name: "matches", query: { new: "1" } } },
+  { label: "Create a dashboard", detail: "Start a focused analysis workspace", icon: "▦", to: { name: "dashboards", query: { create: "1" } } },
+  { label: "Manage universal signals", detail: `${universalSignalCount.value} reusable signals`, icon: "◇", to: { name: "signals" } },
+  { label: "Open overview", detail: "Compare dashboard performance", icon: "⌂", to: { name: "overview" } },
+]);
+const filteredCommands = computed(() => {
+  const query = commandQuery.value.trim().toLowerCase();
+  return query
+    ? commands.value.filter((command) => `${command.label} ${command.detail}`.toLowerCase().includes(query))
+    : commands.value;
+});
+
+watch(commandQuery, () => { activeCommandIndex.value = 0; });
+
+onMounted(() => window.addEventListener("keydown", handleGlobalKeydown));
+onBeforeUnmount(() => window.removeEventListener("keydown", handleGlobalKeydown));
+
+function handleGlobalKeydown(event) {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    openCommands();
+  }
+}
+
+async function openCommands() {
+  commandQuery.value = "";
+  activeCommandIndex.value = 0;
+  if (!commandDialog.value?.open) commandDialog.value?.showModal();
+  await nextTick();
+  commandSearch.value?.focus();
+}
+
+function closeCommands() {
+  commandDialog.value?.close();
+}
+
+function moveCommand(direction) {
+  if (!filteredCommands.value.length) return;
+  activeCommandIndex.value = (activeCommandIndex.value + direction + filteredCommands.value.length) % filteredCommands.value.length;
+}
+
+async function runCommand(command = filteredCommands.value[activeCommandIndex.value]) {
+  if (!command) return;
+  closeCommands();
+  await router.push(command.to);
+}
 
 async function signOut() {
   await recallStore.logout();
@@ -45,7 +97,8 @@ async function signOut() {
               (item.name === 'dashboards' && route.name === 'dashboard-detail'),
           }"
         >
-          {{ item.label }}
+          <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+          <span class="nav-label">{{ item.label }}</span>
         </RouterLink>
       </nav>
 
@@ -55,17 +108,18 @@ async function signOut() {
         <button type="button" class="ghost account-logout" @click="signOut">Sign Out</button>
       </section>
 
-      <section class="sidebar-panel">
-        <h2>Quick Notes</h2>
-        <ul class="compact-list">
-          <li>Universal signals are reusable across every dashboard.</li>
-          <li>Dashboard signals stay local to that analysis.</li>
-          <li>Match and game scope controls when each signal is checked.</li>
-        </ul>
-      </section>
     </aside>
 
     <main class="main-content">
+      <div class="workspace-bar">
+        <div class="breadcrumb"><span>Recall</span><strong>/</strong><span>{{ hero.eyebrow }}</span></div>
+        <div class="workspace-actions">
+          <button type="button" class="ghost command-trigger" @click="openCommands">
+            Quick actions <kbd>⌘ K</kbd>
+          </button>
+        </div>
+      </div>
+
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">{{ hero.eyebrow }}</p>
@@ -80,7 +134,49 @@ async function signOut() {
       <p v-if="recallStore.state.error" class="auth-message" role="alert">
         {{ recallStore.state.error }}
       </p>
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <Transition name="route-view" mode="out-in">
+          <component :is="Component" :key="route.fullPath" />
+        </Transition>
+      </RouterView>
     </main>
+
+    <Teleport to="body">
+      <dialog ref="commandDialog" class="command-dialog" aria-labelledby="command-title">
+        <div class="command-shell">
+          <div class="command-search-row">
+            <span aria-hidden="true">⌕</span>
+            <input
+              ref="commandSearch"
+              v-model="commandQuery"
+              type="search"
+              placeholder="Jump to an action…"
+              aria-label="Search quick actions"
+              @keydown.down.prevent="moveCommand(1)"
+              @keydown.up.prevent="moveCommand(-1)"
+              @keydown.enter.prevent="runCommand()"
+            />
+            <button type="button" class="ghost compact-button" aria-label="Close quick actions" @click="closeCommands">Esc</button>
+          </div>
+          <div class="command-heading"><span id="command-title">Quick actions</span><small>{{ filteredCommands.length }} available</small></div>
+          <div v-if="filteredCommands.length" class="command-list">
+            <button
+              v-for="(command, index) in filteredCommands"
+              :key="command.label"
+              type="button"
+              class="command-item"
+              :class="{ active: activeCommandIndex === index }"
+              @mouseenter="activeCommandIndex = index"
+              @click="runCommand(command)"
+            >
+              <span class="command-icon">{{ command.icon }}</span>
+              <span><strong>{{ command.label }}</strong><small>{{ command.detail }}</small></span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+          <div v-else class="empty-state">No actions match that search.</div>
+        </div>
+      </dialog>
+    </Teleport>
   </div>
 </template>
