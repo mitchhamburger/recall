@@ -1085,6 +1085,156 @@ button.modal-close {
   width: min(940px, calc(100vw - 2rem));
 }
 
+.tutorial-dialog {
+  width: min(720px, calc(100vw - 2rem));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  box-shadow: 0 38px 100px rgba(18, 25, 31, 0.34);
+  isolation: isolate;
+}
+
+.tutorial-dialog::backdrop {
+  background: rgba(12, 18, 22, 0.62);
+  backdrop-filter: none;
+}
+
+.tutorial-modal {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1.2rem;
+  min-height: 500px;
+  padding: 1.5rem;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 92% 5%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 38%),
+    var(--panel-strong);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  opacity: 1;
+}
+
+.tutorial-header,
+.tutorial-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.tutorial-header > div {
+  display: flex;
+  gap: 0.7rem;
+  align-items: baseline;
+}
+
+.tutorial-progress-copy {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.tutorial-progress {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+}
+
+.tutorial-progress span {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+.tutorial-progress span.active {
+  background: var(--accent);
+  transform: scaleY(1.25);
+}
+
+.tutorial-step {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: center;
+  min-height: 320px;
+}
+
+.tutorial-visual {
+  display: grid;
+  gap: 1rem;
+  place-items: center;
+  padding: 2rem 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 9%, var(--panel)), var(--panel));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.tutorial-icon {
+  display: grid;
+  width: 80px;
+  height: 80px;
+  place-items: center;
+  border-radius: 24px;
+  color: white;
+  background: var(--accent);
+  box-shadow: 0 16px 30px color-mix(in srgb, var(--accent) 25%, transparent);
+  font: 700 2.2rem/1 "Space Grotesk", sans-serif;
+}
+
+.tutorial-example {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-strong);
+}
+
+.tutorial-example small {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tutorial-copy h3 {
+  margin: 0.5rem 0 0.8rem;
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+  line-height: 1.08;
+}
+
+.tutorial-copy .muted {
+  color: var(--muted);
+  font-size: 1.02rem;
+  line-height: 1.65;
+}
+
+.tutorial-actions {
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.tutorial-step-enter-active,
+.tutorial-step-leave-active {
+  transition: opacity 150ms ease, transform 180ms ease;
+}
+
+.tutorial-step-enter-from {
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+.tutorial-step-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
 .dashboard-create-form {
   margin-top: 1.25rem;
 }
@@ -1603,6 +1753,34 @@ button.modal-close {
     min-height: 100dvh;
     max-height: 100dvh;
     border-radius: 0;
+  }
+
+  .tutorial-dialog {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .tutorial-modal {
+    min-height: calc(100dvh - 1rem);
+    padding: 1.15rem;
+  }
+
+  .tutorial-step {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    min-height: 0;
+  }
+
+  .tutorial-visual {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 1rem;
+  }
+
+  .tutorial-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 17px;
+    font-size: 1.6rem;
   }
 
   .stepper li > div {

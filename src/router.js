@@ -4,7 +4,6 @@ import AppShell from "./components/AppShell.vue";
 import AuthView from "./views/AuthView.vue";
 import DashboardDetailView from "./views/DashboardDetailView.vue";
 import DashboardsView from "./views/DashboardsView.vue";
-import MatchesView from "./views/MatchesView.vue";
 import OverviewView from "./views/OverviewView.vue";
 import SignalsView from "./views/SignalsView.vue";
 
@@ -29,16 +28,6 @@ const routes = [
           eyebrow: "Dashboard-first analysis",
           title: "Every statistic belongs to a dashboard.",
           description: "Assign matches to a dashboard to keep each deck, format, or testing question in its own view.",
-        },
-      },
-      {
-        path: "matches",
-        name: "matches",
-        component: MatchesView,
-        meta: {
-          eyebrow: "Match history",
-          title: "Capture the result while the details are fresh.",
-          description: "Log games and signals, then assign the match to the dashboard where it belongs.",
         },
       },
       {

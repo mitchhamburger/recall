@@ -112,18 +112,5 @@ const bestGameRate = computed(() =>
         </article>
       </div>
     </article>
-
-    <article class="panel">
-      <div class="panel-header">
-        <div>
-          <p class="eyebrow">Directory</p>
-          <h3>Open A Dashboard</h3>
-        </div>
-      </div>
-      <div v-if="!summaries.length" class="empty-state">Create a dashboard to organize your analysis.</div>
-      <div v-else class="dashboard-list-grid">
-        <DashboardCard v-for="summary in summaries" :key="summary.dashboard.id" :summary="summary" />
-      </div>
-    </article>
   </div>
 </template>

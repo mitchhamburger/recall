@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import MatchCard from "../components/MatchCard.vue";
+import MatchLogger from "./MatchesView.vue";
 import { recallStore } from "../store.js";
 import { dashboardSummary, matchesForDashboard, percent } from "../utils/metrics.js";
 
@@ -13,6 +14,7 @@ const savingSignal = ref(false);
 const signalError = ref("");
 const signalScope = ref("all");
 const expandedSignalId = ref(null);
+const matchLogger = ref(null);
 const dashboard = computed(() => recallStore.state.dashboards.find((item) => item.id === route.params.id));
 const matches = computed(() => (dashboard.value ? matchesForDashboard(dashboard.value, recallStore.state.matches) : []));
 const summary = computed(() => (dashboard.value ? dashboardSummary(dashboard.value, recallStore.state.matches) : null));
@@ -89,7 +91,7 @@ async function addDashboardSignal() {
       <div class="panel-header dashboard-detail-header">
         <div><p class="eyebrow">Dashboard</p><h3>{{ dashboard.name }}</h3></div>
         <div class="inline-actions">
-          <RouterLink :to="{ name: 'matches', query: { dashboard: dashboard.id } }" class="button secondary">Log Match Here</RouterLink>
+          <button type="button" class="secondary" @click="matchLogger?.open()">Log Match Here</button>
           <button type="button" class="ghost danger-button" @click="removeDashboard">Delete Dashboard</button>
           <RouterLink :to="{ name: 'dashboards' }" class="button ghost">Back</RouterLink>
         </div>
@@ -194,5 +196,7 @@ async function addDashboardSignal() {
       <div v-if="!matches.length" class="empty-state">No matches assigned to this dashboard yet.</div>
       <div v-else class="stack"><MatchCard v-for="match in matches" :key="match.id" :match="match" /></div>
     </article>
+
+    <MatchLogger ref="matchLogger" :dashboard="dashboard" />
   </div>
 </template>

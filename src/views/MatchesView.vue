@@ -1,11 +1,8 @@
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import MatchCard from "../components/MatchCard.vue";
+import { computed, nextTick, reactive, ref } from "vue";
 import { recallStore } from "../store.js";
 
-const route = useRoute();
-const router = useRouter();
+const props = defineProps({ dashboard: { type: Object, required: true } });
 const loggerDialog = ref(null);
 const isLoggerOpen = ref(false);
 const phase = ref("setup");
@@ -15,9 +12,7 @@ const setup = reactive({ gamesToWin: 2, openingRollWinner: "me", notes: "", sign
 const completedGames = ref([]);
 const currentGame = reactive(makeGame());
 
-const selectedDashboard = computed(() =>
-  recallStore.state.dashboards.find((dashboard) => dashboard.id === route.query.dashboard),
-);
+const selectedDashboard = computed(() => props.dashboard);
 const availableSignals = computed(() =>
   recallStore.state.signals.filter(
     (signal) => !signal.dashboardId || signal.dashboardId === selectedDashboard.value?.id,
@@ -41,15 +36,6 @@ const matchComplete = computed(
 );
 const matchWinner = computed(() => (score.value.me >= setup.gamesToWin ? "me" : "opponent"));
 const selectedGameSignalCount = computed(() => Object.values(currentGame.signals).filter(Boolean).length);
-
-watch(
-  () => [route.query.dashboard, route.query.new],
-  ([dashboardId, newMatch]) => { if (dashboardId || newMatch === "1") openLogger(); },
-);
-
-onMounted(() => {
-  if (route.query.dashboard || route.query.new === "1") openLogger();
-});
 
 async function openLogger() {
   isLoggerOpen.value = true;
@@ -112,10 +98,6 @@ function restartSetup() {
   resetCurrentGame();
 }
 
-async function clearDashboard() {
-  await router.replace({ name: "matches" });
-}
-
 async function saveMatch() {
   if (!matchComplete.value) return;
   saving.value = true;
@@ -137,41 +119,25 @@ async function saveMatch() {
       notes: setup.notes.trim(),
       signals,
       games: completedGames.value,
-      dashboardIds: dashboardId ? [dashboardId] : [],
+      dashboardIds: [dashboardId],
     });
     Object.assign(setup, { gamesToWin: 2, openingRollWinner: "me", notes: "", signals: {} });
     completedGames.value = [];
     resetCurrentGame();
     phase.value = "setup";
     closeLogger();
-    if (dashboardId) await router.push({ name: "dashboard-detail", params: { id: dashboardId } });
   } catch (caught) {
     error.value = caught.message;
   } finally {
     saving.value = false;
   }
 }
+
+defineExpose({ open: openLogger });
 </script>
 
 <template>
-  <div class="panel-grid">
-    <article class="panel match-launcher">
-      <div>
-        <p class="eyebrow">Guided Entry</p>
-        <h3>{{ phase === "games" ? "Match In Progress" : "Ready For Your Next Match?" }}</h3>
-        <p class="muted">
-          {{ phase === "games"
-            ? `Your ${matchType.toUpperCase()} draft is saved here at ${score.me}–${score.opponent}.`
-            : "Record a match in a focused, step-by-step workspace." }}
-        </p>
-      </div>
-      <div class="match-launcher-actions">
-        <span v-if="phase === 'games'" class="pill">Game {{ completedGames.length + (matchComplete ? 0 : 1) }}</span>
-        <button type="button" @click="openLogger">{{ phase === "games" ? "Resume Match" : "Log A Match" }}</button>
-      </div>
-    </article>
-
-    <Teleport to="body">
+  <Teleport to="body">
       <dialog
         ref="loggerDialog"
         class="match-log-dialog"
@@ -198,9 +164,8 @@ async function saveMatch() {
 
           <p v-if="error" class="auth-message" role="alert">{{ error }}</p>
 
-          <div v-if="selectedDashboard" class="inline-banner">
+          <div class="inline-banner">
         <div><strong>Dashboard destination</strong><p class="muted">This match will be added to {{ selectedDashboard.name }}.</p></div>
-        <button v-if="phase === 'setup'" type="button" class="ghost" @click="clearDashboard">Clear</button>
       </div>
 
           <form v-if="phase === 'setup'" class="stack setup-flow" @submit.prevent="startMatch">
@@ -273,7 +238,7 @@ async function saveMatch() {
           <div class="scoreboard-meta">
             <span>{{ matchType.toUpperCase() }}</span>
             <span>{{ setup.openingRollWinner === 'me' ? 'You won' : 'Opponent won' }} the roll</span>
-            <span>{{ selectedDashboard?.name || "History only" }}</span>
+            <span>{{ selectedDashboard.name }}</span>
           </div>
         </section>
 
@@ -334,12 +299,5 @@ async function saveMatch() {
           </div>
         </article>
       </dialog>
-    </Teleport>
-
-    <article class="panel">
-      <div class="panel-header"><div><p class="eyebrow">History</p><h3>All Logged Matches</h3></div></div>
-      <div v-if="!recallStore.state.matches.length" class="empty-state">No matches logged yet.</div>
-      <div v-else class="stack"><MatchCard v-for="match in recallStore.state.matches" :key="match.id" :match="match" /></div>
-    </article>
-  </div>
+  </Teleport>
 </template>

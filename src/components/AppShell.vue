@@ -1,18 +1,21 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { recallStore } from "../store.js";
+import DashboardCreator from "./DashboardCreator.vue";
+import DashboardTutorial from "./DashboardTutorial.vue";
 
 const route = useRoute();
 const router = useRouter();
 const commandDialog = ref(null);
 const commandSearch = ref(null);
+const dashboardCreator = ref(null);
+const dashboardTutorial = ref(null);
 const commandQuery = ref("");
 const activeCommandIndex = ref(0);
 const universalSignalCount = computed(() => recallStore.state.signals.filter((signal) => !signal.dashboardId).length);
 const navItems = [
   { name: "overview", label: "Home", icon: "⌂" },
-  { name: "matches", label: "Log Matches", icon: "＋" },
   { name: "signals", label: "Signals", icon: "◇" },
   { name: "dashboards", label: "Dashboards", icon: "▦" },
 ];
@@ -23,10 +26,9 @@ const hero = computed(() => ({
   description: route.meta.description || "",
 }));
 const commands = computed(() => [
-  { label: "Log a new match", detail: "Open guided match entry", icon: "＋", to: { name: "matches", query: { new: "1" } } },
-  { label: "Create a dashboard", detail: "Start a focused analysis workspace", icon: "▦", to: { name: "dashboards", query: { create: "1" } } },
+  { label: "Create a dashboard", detail: "Start a focused analysis workspace", icon: "▦", action: openDashboardCreator },
   { label: "Manage universal signals", detail: `${universalSignalCount.value} reusable signals`, icon: "◇", to: { name: "signals" } },
-  { label: "Open overview", detail: "Compare dashboard performance", icon: "⌂", to: { name: "overview" } },
+  { label: "Open home", detail: "Compare dashboard performance", icon: "⌂", to: { name: "overview" } },
 ]);
 const filteredCommands = computed(() => {
   const query = commandQuery.value.trim().toLowerCase();
@@ -39,6 +41,8 @@ watch(commandQuery, () => { activeCommandIndex.value = 0; });
 
 onMounted(() => window.addEventListener("keydown", handleGlobalKeydown));
 onBeforeUnmount(() => window.removeEventListener("keydown", handleGlobalKeydown));
+
+provide("openDashboardCreator", openDashboardCreator);
 
 function handleGlobalKeydown(event) {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -59,6 +63,14 @@ function closeCommands() {
   commandDialog.value?.close();
 }
 
+function openDashboardCreator() {
+  dashboardCreator.value?.open();
+}
+
+function openDashboardTutorial() {
+  dashboardTutorial.value?.open();
+}
+
 function moveCommand(direction) {
   if (!filteredCommands.value.length) return;
   activeCommandIndex.value = (activeCommandIndex.value + direction + filteredCommands.value.length) % filteredCommands.value.length;
@@ -67,7 +79,8 @@ function moveCommand(direction) {
 async function runCommand(command = filteredCommands.value[activeCommandIndex.value]) {
   if (!command) return;
   closeCommands();
-  await router.push(command.to);
+  if (command.action) command.action();
+  else await router.push(command.to);
 }
 
 async function signOut() {
@@ -126,9 +139,9 @@ async function signOut() {
           <h2>{{ hero.title }}</h2>
           <p class="muted">{{ hero.description }}</p>
         </div>
-        <RouterLink v-if="route.name === 'overview'" :to="{ name: 'dashboards' }" class="button hero-action">
-          Create Dashboard
-        </RouterLink>
+        <button v-if="route.name === 'overview'" type="button" class="hero-action" @click="openDashboardTutorial">
+          How Dashboards Work
+        </button>
       </section>
 
       <p v-if="recallStore.state.error" class="auth-message" role="alert">
@@ -178,5 +191,8 @@ async function signOut() {
         </div>
       </dialog>
     </Teleport>
+
+    <DashboardCreator ref="dashboardCreator" />
+    <DashboardTutorial ref="dashboardTutorial" @create-dashboard="openDashboardCreator" />
   </div>
 </template>
